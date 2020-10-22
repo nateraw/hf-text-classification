@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
-from transformers import AutoTokenizer
 from datasets import load_dataset
 from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 
 
 def convert_to_features(example_batch, indices, tokenizer, text_fields, padding, truncation, max_length):
@@ -14,31 +14,16 @@ def convert_to_features(example_batch, indices, tokenizer, text_fields, padding,
 
     # Tokenize the text/text pairs
     features = tokenizer.batch_encode_plus(
-        texts_or_text_pairs,
-        padding=padding,
-        truncation=truncation,
-        max_length=max_length
+        texts_or_text_pairs, padding=padding, truncation=truncation, max_length=max_length
     )
 
     # Rename label to labels to make it easier to pass to model forward
-#     features['labels'] = example_batch['label']
     features['idx'] = indices
 
     return features
 
 
 def preprocess(ds, tokenizer, text_fields, padding='max_length', truncation='only_first', max_length=128):
-#     ds = ds.map(
-#         lambda ex: tokenizer(
-#             ex[text_fields[0]]
-#             if len(text_fields) < 2
-#             else list(zip(ex[text_fields[0]], ex[text_fields[1]])),
-#             padding=padding,
-#             truncation=truncation,
-#             max_length=max_length,
-#         ),
-#         batched=True,
-#     )
     ds = ds.map(
         convert_to_features,
         batched=True,
@@ -48,13 +33,11 @@ def preprocess(ds, tokenizer, text_fields, padding='max_length', truncation='onl
             'text_fields': text_fields,
             'padding': padding,
             'truncation': truncation,
-            'max_length': max_length
-        }
+            'max_length': max_length,
+        },
     )
     ds.rename_column_('label', "labels")
     return ds
-
-
 
 
 def transform_labels(example, idx, label2id: dict):
@@ -74,7 +57,7 @@ class TextClassificationDataModule(pl.LightningDataModule):
         batch_size: int = 16,
         num_workers: int = 8,
         use_fast: bool = True,
-        seed: int = 42
+        seed: int = 42,
     ):
         super().__init__()
         self.model_name_or_path = model_name_or_path
@@ -101,17 +84,19 @@ class TextClassificationDataModule(pl.LightningDataModule):
             self.ds = self.ds.map(transform_labels, with_indices=True, fn_kwargs={'label2id': self.label2id})
 
         cols_to_keep = [
-            x for x in ['input_ids', 'attention_mask', 'token_type_ids', 'labels', 'idx'] if x in self.ds['train'].features
+            x
+            for x in ['input_ids', 'attention_mask', 'token_type_ids', 'labels', 'idx']
+            if x in self.ds['train'].features
         ]
         self.ds.set_format("torch", columns=cols_to_keep)
         self.tokenizer = tokenizer
 
     def train_dataloader(self):
         return DataLoader(self.ds['train'], batch_size=self.batch_size, num_workers=self.num_workers)
-    
+
     def val_dataloader(self):
         return DataLoader(self.ds['validation'], batch_size=self.batch_size, num_workers=self.num_workers)
-    
+
     def test_dataloader(self):
         return DataLoader(self.ds['test'], batch_size=self.batch_size, num_workers=self.num_workers)
 

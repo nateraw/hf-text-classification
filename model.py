@@ -1,52 +1,44 @@
+import warnings
 from pathlib import Path
-from typing import List, Optional, Callable
+from typing import Callable, List, Optional
 
 import pytorch_lightning as pl
 import torch
-from transformers import (
-    AutoConfig,
-    AutoModelForSequenceClassification,
-    AutoTokenizer,
-    AutoConfig,
-    AdamW,
-    get_linear_schedule_with_warmup
-)
-from datasets import load_dataset
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.utilities import rank_zero_only
 from torch.utils.data import DataLoader
+from transformers import (AdamW, AutoConfig,
+                          AutoModelForSequenceClassification, AutoTokenizer,
+                          get_linear_schedule_with_warmup)
 
-import warnings
 warnings.filterwarnings('ignore')
 
 
 class TextClassifier(pl.LightningModule):
     def __init__(
-            self,
-            model_name_or_path: str,
-            label2id: List[str],
-            learning_rate: float = 2e-5,
-            adam_epsilon: float = 1e-8,
-            weight_decay: float = 0.0,
-            warmup_steps: int = 0,
-            predictions_file: str = 'predictions.pt',
-        ):
+        self,
+        model_name_or_path: str,
+        label2id: List[str],
+        learning_rate: float = 2e-5,
+        adam_epsilon: float = 1e-8,
+        weight_decay: float = 0.0,
+        warmup_steps: int = 0,
+        predictions_file: str = 'predictions.pt',
+    ):
         super().__init__()
         self.save_hyperparameters()
         self.config = AutoConfig.from_pretrained(
             self.hparams.model_name_or_path,
             num_labels=len(self.hparams.label2id),
             id2label={v: k for k, v in self.hparams.label2id.items()},
-            label2id=self.hparams.label2id
+            label2id=self.hparams.label2id,
         )
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            self.hparams.model_name_or_path,
-            config=self.config
+            self.hparams.model_name_or_path, config=self.config
         )
         self.precision_metric = pl.metrics.Precision(num_classes=len(self.hparams.label2id))
         self.recall_metric = pl.metrics.Recall(num_classes=len(self.hparams.label2id))
         self.accuracy_metric = pl.metrics.Accuracy()
-    
+
     def metric(self, preds, labels, mode='val'):
         p = self.precision_metric(preds, labels)
         r = self.recall_metric(preds, labels)
@@ -98,11 +90,7 @@ class TextClassifier(pl.LightningModule):
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=self.hparams.warmup_steps, num_training_steps=self.total_steps
         )
-        scheduler = {
-            'scheduler': scheduler,
-            'interval': 'step',
-            'frequency': 1
-        }
+        scheduler = {'scheduler': scheduler, 'interval': 'step', 'frequency': 1}
         return [optimizer], [scheduler]
 
     @rank_zero_only
