@@ -17,7 +17,7 @@ def convert_to_features(example_batch, indices, tokenizer, text_fields, padding,
         texts_or_text_pairs, padding=padding, truncation=truncation, max_length=max_length
     )
 
-    # Rename label to labels to make it easier to pass to model forward
+    # idx is unique ID we can use to link predictions to original data
     features['idx'] = indices
 
     return features
