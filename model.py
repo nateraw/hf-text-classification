@@ -188,15 +188,19 @@ class MrpcDataModule(TextClassificationDataModule):
     do_transform_labels = False
 
 
-if __name__ == '__main__':
-    from pl_bolts.utils.arguments import LightningArgumentParser
-    import os
-    os.environ["TOKENIZERS_PARALLELISM"] = "true"
+def parse_args(args=None):
     parser = LightningArgumentParser()
     parser.add_datamodule_args(EmotionDataModule)
     parser.add_model_args(TextClassifier)
     parser.add_trainer_args()
-    args = parser.parse_lit_args()
+    return parser.parse_lit_args()
+
+
+if __name__ == '__main__':
+    from arguments import LightningArgumentParser
+    import os
+    os.environ["TOKENIZERS_PARALLELISM"] = "true"
+    dm, model, trainer = main()
     pl.seed_everything(args.datamodule.seed)
     dm = EmotionDataModule.from_argparse_args(args.datamodule)
     dm.setup('fit')
