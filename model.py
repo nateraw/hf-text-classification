@@ -200,7 +200,7 @@ if __name__ == '__main__':
     from arguments import LightningArgumentParser
     import os
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
-    dm, model, trainer = main()
+    args = parse_args()
     pl.seed_everything(args.datamodule.seed)
     dm = EmotionDataModule.from_argparse_args(args.datamodule)
     dm.setup('fit')
@@ -211,6 +211,6 @@ if __name__ == '__main__':
         // args.trainer.accumulate_grad_batches
         * float(args.trainer.max_epochs)
     )
-    trainer = pl.Trainer.from_argparse_args(args)
+    trainer = pl.Trainer.from_argparse_args(args.trainer)
     trainer.fit(model, dm)
     # trainer.test(test_dataloaders=test_loader)
