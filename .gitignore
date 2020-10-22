@@ -127,3 +127,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+predictions_rank*
+bert-base-uncased*
+hf-te*
+lightning_logs*

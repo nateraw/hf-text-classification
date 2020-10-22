@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Callable
 
 import pytorch_lightning as pl
 import torch
@@ -43,17 +43,23 @@ class TextClassifier(pl.LightningModule):
             self.hparams.model_name_or_path,
             config=self.config
         )
-        self.accuracy = pl.metrics.Accuracy()
+        self.precision_metric = pl.metrics.Precision(num_classes=len(self.hparams.label2id))
+        self.recall_metric = pl.metrics.Recall(num_classes=len(self.hparams.label2id))
+        self.accuracy_metric = pl.metrics.Accuracy()
+    
+    def metric(self, preds, labels, mode='val'):
+        p = self.precision_metric(preds, labels)
+        r = self.recall_metric(preds, labels)
+        a = self.accuracy_metric(preds, labels)
+        return {f'{mode}_precision': p, f'{mode}_recall': r, f'{mode}_acc': a}
 
     def forward(self, **inputs):
         return self.model(**inputs)
 
     def training_step(self, batch, batch_idx):
         del batch['idx']
-        self.batch = batch
         outputs = self(**batch)
         loss = outputs[0]
-        self.outputs = outputs
         self.log('train_loss', loss)
         return loss
 
@@ -62,10 +68,8 @@ class TextClassifier(pl.LightningModule):
         outputs = self(**batch)
         val_loss, logits = outputs[:2]
         preds = torch.argmax(logits, axis=1)
-        self.preds = preds
-        self.outputs = outputs
-        val_acc = self.accuracy(preds, batch['labels'])
-        self.log('val_acc', val_acc, prog_bar=True, on_step=False, on_epoch=True)
+        metric_dict = self.metric(preds, batch['labels'])
+        self.log_dict(metric_dict, prog_bar=True, on_step=False, on_epoch=True)
         self.log('val_loss', val_loss, prog_bar=True)
 
     def test_step(self, batch, batch_idx, dataloader_idx=0):
@@ -91,10 +95,8 @@ class TextClassifier(pl.LightningModule):
             },
         ]
         optimizer = AdamW(optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
-        self.opt = optimizer
-
         scheduler = get_linear_schedule_with_warmup(
-            self.opt, num_warmup_steps=self.hparams.warmup_steps, num_training_steps=self.total_steps
+            optimizer, num_warmup_steps=self.hparams.warmup_steps, num_training_steps=self.total_steps
         )
         scheduler = {
             'scheduler': scheduler,
@@ -104,113 +106,7 @@ class TextClassifier(pl.LightningModule):
         return [optimizer], [scheduler]
 
     @rank_zero_only
-    def on_save_checkpoint(self, checkpoint):
-        log_dir = self.trainer.logger.log_dir
-        self.hparams.save_dir = str(Path(log_dir) / 'saved_hf_components')
+    def save_pretrained(self, save_dir):
+        self.hparams.save_dir = save_dir
         self.model.save_pretrained(self.hparams.save_dir)
         self.tokenizer.save_pretrained(self.hparams.save_dir)
-
-
-def preprocess(ds, tokenizer, text_fields, padding='max_length', truncation='only_first', max_length=128):
-    ds = ds.map(
-        lambda ex: tokenizer(
-            ex[text_fields[0]]
-            if len(text_fields) < 2
-            else list(zip(ex[text_fields[0]], ex[text_fields[1]])),
-            padding=padding,
-            truncation=truncation,
-            max_length=max_length,
-        ),
-        batched=True,
-    )
-    ds.rename_column_('label', "labels")
-    return ds
-
-
-def transform_labels(example, idx, label2id: dict):
-    str_label = example['labels']
-    example['labels'] = label2id[str_label]
-    example['idx'] = idx
-    return example
-
-
-class TextClassificationDataModule(pl.LightningDataModule):
-    def __init__(
-        self,
-        model_name_or_path: str = 'bert-base-uncased',
-        batch_size: int = 16,
-        num_workers: int = 8,
-        use_fast: bool = True,
-        seed: int = 42
-    ):
-        super().__init__()
-        self.model_name_or_path = model_name_or_path
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.use_fast = use_fast
-        self.seed = seed
-
-    def setup(self, stage):
-        tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path, use_fast=self.use_fast)
-        self.ds = load_dataset(self.dataset_name, self.subset_name)
-        self.ds = preprocess(self.ds, tokenizer, text_fields=self.text_fields)
-        if self.do_transform_labels:
-            self.ds = self.ds.map(transform_labels, with_indices=True, fn_kwargs={'label2id': self.label2id})
-        cols_to_keep = [
-            x for x in ['input_ids', 'attention_mask', 'token_type_ids', 'labels', 'idx'] if x in self.ds['train'].features
-        ]
-        self.ds.set_format("torch", columns=cols_to_keep)
-        self.tokenizer = tokenizer
-
-    def train_dataloader(self):
-        return DataLoader(self.ds['train'], batch_size=self.batch_size, num_workers=self.num_workers)
-    
-    def val_dataloader(self):
-        return DataLoader(self.ds['validation'], batch_size=self.batch_size, num_workers=self.num_workers)
-    
-    def test_dataloader(self):
-        return DataLoader(self.ds['test'], batch_size=self.batch_size, num_workers=self.num_workers)
-
-
-class EmotionDataModule(TextClassificationDataModule):
-    dataset_name = 'emotion'
-    subset_name = None
-    text_fields = ['text']
-    label2id = {"sadness": 0, "joy": 1, "love": 2, "anger": 3, "fear": 4, "surprise": 5}
-    do_transform_labels = True
-
-
-class MrpcDataModule(TextClassificationDataModule):
-    dataset_name = 'glue'
-    subset_name = 'mrpc'
-    text_fields = ['sentence1', 'sentence2']
-    label2id = {"not_equivalent": 0, "equivalent": 1}
-    do_transform_labels = False
-
-
-def parse_args(args=None):
-    parser = LightningArgumentParser()
-    parser.add_datamodule_args(EmotionDataModule)
-    parser.add_model_args(TextClassifier)
-    parser.add_trainer_args()
-    return parser.parse_lit_args()
-
-
-if __name__ == '__main__':
-    from arguments import LightningArgumentParser
-    import os
-    os.environ["TOKENIZERS_PARALLELISM"] = "true"
-    args = parse_args()
-    pl.seed_everything(args.datamodule.seed)
-    dm = EmotionDataModule.from_argparse_args(args.datamodule)
-    dm.setup('fit')
-    model = TextClassifier(dm.model_name_or_path, dm.label2id, **vars(args.model))
-    model.tokenizer = dm.tokenizer
-    model.total_steps = (
-        (len(dm.ds['train']) // (args.datamodule.batch_size * max(1, (args.trainer.gpus or 0))))
-        // args.trainer.accumulate_grad_batches
-        * float(args.trainer.max_epochs)
-    )
-    trainer = pl.Trainer.from_argparse_args(args.trainer)
-    trainer.fit(model, dm)
-    # trainer.test(test_dataloaders=test_loader)
