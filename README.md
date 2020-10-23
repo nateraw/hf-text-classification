@@ -3,22 +3,28 @@
 
 ## Getting Started
 
-#### Install the dependencies
-
-On a blank python3.7 environment, run:
+First, I suggest setting up a blank Python 3.7 environment. Then, run the following to clone this repo and install the requirements.
 
 ```
+git clone https://github.com/nateraw/hf-text-classification.git
+cd hf-text-classification
 pip install -r requirements.txt
 ```
 
 
 ## Usage
 
-Fine-tune `bert-base-uncased` for emotion detection. The following command will:
+### Overview
 
-    1. Prepare the emotion dataset from `datasets` package
-    2. Train on 4 GPUs with PyTorch's native 16 bit precision
-    3. Run inference on the test set on 4 GPUs w/ native 16 bit precision
+The `train.py` file will:
+
+  1. Prepare the emotion dataset from `datasets` package
+  2. Train on 4 GPUs with PyTorch's native 16 bit precision
+  3. Run inference on the test set on 4 GPUs w/ native 16 bit precision
+
+### Examples
+
+#### Fine-tune `bert-base-uncased` for emotion detection.
 
 ```
 python train.py \
