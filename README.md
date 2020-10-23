@@ -23,6 +23,11 @@ The `train.py` file will:
   2. Train using Lightning's `pl.Trainer` on multiple GPUs with 16 bit precision
   3. Run inference on the dataset's test set and save predictions to file (on multiple GPUs, of course :sunglasses:)
 
+Currently, there are 3 available datasets you can use (pass these to the `--datamodule` flag from CLI):
+
+  - emotion
+  - ag_news
+  - mrpc
 
 ### Examples
 
