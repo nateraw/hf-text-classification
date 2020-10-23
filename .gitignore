@@ -132,3 +132,4 @@ predictions_rank*
 bert-base-uncased*
 hf-te*
 lightning_logs*
+outputs/
