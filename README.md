@@ -1,5 +1,6 @@
 # hf-text-classification
 
+Text classification using [PyTorch Lightning](https://github.com/PyTorchLightning/pytorch-lightning), [transformers](https://github.com/huggingface/transformers), and [datasets](https://github.com/huggingface/datasets)
 
 ## Getting Started
 
@@ -18,13 +19,14 @@ pip install -r requirements.txt
 
 The `train.py` file will:
 
-  1. Prepare the emotion dataset from `datasets` package
-  2. Train on 4 GPUs with PyTorch's native 16 bit precision
-  3. Run inference on the test set on 4 GPUs w/ native 16 bit precision
+  1. Prepare a text classification dataset from the `datasets` package
+  2. Train using Lightning's `pl.Trainer` on multiple GPUs with 16 bit precision
+  3. Run inference on the dataset's test set and save predictions to file (on multiple GPUs, of course :sunglasses:)
+
 
 ### Examples
 
-#### Fine-tune `bert-base-uncased` for emotion detection.
+#### Fine-tune `bert-base-uncased` for emotion detection
 
 ```
 python train.py \
