@@ -106,7 +106,7 @@ class EmotionDataModule(TextClassificationDataModule):
     subset_name = None
     text_fields = ['text']
     label2id = {"sadness": 0, "joy": 1, "love": 2, "anger": 3, "fear": 4, "surprise": 5}
-    do_transform_labels = False
+    do_transform_labels = True
     train_val_split = None
 
 
